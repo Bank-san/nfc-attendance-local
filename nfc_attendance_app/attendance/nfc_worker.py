@@ -1,10 +1,16 @@
 from PyQt6.QtCore import QThread, pyqtSignal
 from smartcard.System import readers
 from smartcard.util import toHexString
+from datetime import datetime, timedelta
 import time
 
 class NFCWorker(QThread):
     signal = pyqtSignal(str)
+
+    def __init__(self):
+        super().__init__()
+        self.last_uid = None
+        self.last_time = None
 
     def run(self):
         r = readers()
@@ -23,12 +29,24 @@ class NFCWorker(QThread):
 
                 if sw1 == 0x90 and sw2 == 0x00:
                     uid = toHexString(data)
+
+                    now = datetime.now()
+                    if uid == self.last_uid and self.last_time and now - self.last_time < timedelta(seconds=10):
+                        # 同じカードで短時間ならスキップ
+                        time.sleep(0.5)
+                        continue
+
+                    self.last_uid = uid
+                    self.last_time = now
+
                     self.signal.emit(uid)
                 else:
-                    self.signal.emit("UID取得失敗")
+                    self.signal.emit("カードをかざしてください")
 
-                time.sleep(1)
+                time.sleep(0.5)
                 connection.disconnect()
+
             except Exception as e:
-                self.signal.emit(f"エラー: {e}")
+                # スマートカード未挿入などの場合
+                self.signal.emit("カードをかざしてください")
                 time.sleep(0.5)

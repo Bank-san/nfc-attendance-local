@@ -1,6 +1,9 @@
-from PyQt6.QtWidgets import QWidget, QFormLayout, QLineEdit, QPushButton, QMessageBox
-from registration.logic import is_registered, register_user
+from PyQt6.QtWidgets import (
+    QWidget, QFormLayout, QLineEdit, QPushButton, QMessageBox, QHBoxLayout
+)
+from registration.logic import is_registered, register_user, get_user_by_uid, update_user, delete_user
 from attendance.nfc_worker import NFCWorker
+
 
 class RegisterWindow(QWidget):
     def __init__(self):
@@ -10,20 +13,49 @@ class RegisterWindow(QWidget):
 
         self.layout = QFormLayout()
 
-        self.name_input = QLineEdit()
+        self.name_kanji_input = QLineEdit()
+        self.name_kana_input = QLineEdit()
+        self.emergency_input = QLineEdit()
         self.dob_input = QLineEdit()
+        self.school_input = QLineEdit()
+        self.prefecture_input = QLineEdit()
+        self.city_input = QLineEdit()
+        self.block_input = QLineEdit()
+        self.building_input = QLineEdit()
+        self.gender_input = QLineEdit()
+        self.additional_input = QLineEdit()
         self.nfc_id_input = QLineEdit()
         self.nfc_id_input.setPlaceholderText("カードをかざしてください...")
         self.nfc_id_input.setReadOnly(True)
         self.nfc_id_input.setStyleSheet("background-color: #eee; color: #555;")
 
-        self.layout.addRow("名前", self.name_input)
-        self.layout.addRow("生年月日", self.dob_input)
+        self.layout.addRow("名前（漢字）", self.name_kanji_input)
+        self.layout.addRow("名前（ひらがな）", self.name_kana_input)
+        self.layout.addRow("緊急連絡先", self.emergency_input)
+        self.layout.addRow("生年月日 (YYYYMMDD)", self.dob_input)
+        self.layout.addRow("学校名", self.school_input)
+        self.layout.addRow("都道府県", self.prefecture_input)
+        self.layout.addRow("市町村", self.city_input)
+        self.layout.addRow("番地", self.block_input)
+        self.layout.addRow("建物名", self.building_input)
+        self.layout.addRow("性別", self.gender_input)
+        self.layout.addRow("その他（持病やアレルギーなど）", self.additional_input)
         self.layout.addRow("NFCカードID", self.nfc_id_input)
 
         self.submit_button = QPushButton("登録")
         self.submit_button.clicked.connect(self.on_submit)
-        self.layout.addRow(self.submit_button)
+
+        self.update_button = QPushButton("更新")
+        self.update_button.clicked.connect(self.on_update)
+
+        self.delete_button = QPushButton("削除")
+        self.delete_button.clicked.connect(self.on_delete)
+
+        button_row = QHBoxLayout()
+        button_row.addWidget(self.submit_button)
+        button_row.addWidget(self.update_button)
+        button_row.addWidget(self.delete_button)
+        self.layout.addRow(button_row)
 
         self.setLayout(self.layout)
 
@@ -32,18 +64,78 @@ class RegisterWindow(QWidget):
         self.reader.start()
 
     def on_uid_detected(self, uid):
+        self.current_uid = uid
+        self.nfc_id_input.setText(uid)
+
         if is_registered(uid):
+            user = get_user_by_uid(uid)
+            self.name_kanji_input.setText(user.name_kanji)
+            self.name_kana_input.setText(user.name_kana)
+            self.emergency_input.setText(user.emergency_contact)
+            self.dob_input.setText(user.date_of_birth)
+            self.school_input.setText(user.school)
+            self.prefecture_input.setText(user.prefecture)
+            self.city_input.setText(user.city)
+            self.block_input.setText(user.block)
+            self.building_input.setText(user.building)
+            self.gender_input.setText(user.gender)
+            self.additional_input.setText(user.additional_info)
             QMessageBox.information(self, "確認", "このカードはすでに登録されています")
-        else:
-            self.nfc_id_input.setText(uid)
 
     def on_submit(self):
         uid = self.nfc_id_input.text().strip()
-        name = self.name_input.text().strip()
-        dob = self.dob_input.text().strip()
-        if not uid or not name:
-            QMessageBox.warning(self, "未入力", "名前とUIDが必要です")
+        if not uid:
+            QMessageBox.warning(self, "未入力", "カードをかざしてください")
             return
-        register_user(uid, name, dob)
+
+        user_data = {
+            "name_kanji": self.name_kanji_input.text().strip(),
+            "name_kana": self.name_kana_input.text().strip(),
+            "emergency_contact": self.emergency_input.text().strip(),
+            "date_of_birth": self.dob_input.text().strip(),
+            "school": self.school_input.text().strip(),
+            "prefecture": self.prefecture_input.text().strip(),
+            "city": self.city_input.text().strip(),
+            "block": self.block_input.text().strip(),
+            "building": self.building_input.text().strip(),
+            "gender": self.gender_input.text().strip(),
+            "additional_info": self.additional_input.text().strip(),
+        }
+
+        register_user(uid, **user_data)
         QMessageBox.information(self, "完了", "ユーザー登録が完了しました")
+        self.close()
+
+    def on_update(self):
+        uid = self.nfc_id_input.text().strip()
+        if not is_registered(uid):
+            QMessageBox.warning(self, "未登録", "このカードは未登録です")
+            return
+
+        updated_data = {
+            "name_kanji": self.name_kanji_input.text().strip(),
+            "name_kana": self.name_kana_input.text().strip(),
+            "emergency_contact": self.emergency_input.text().strip(),
+            "date_of_birth": self.dob_input.text().strip(),
+            "school": self.school_input.text().strip(),
+            "prefecture": self.prefecture_input.text().strip(),
+            "city": self.city_input.text().strip(),
+            "block": self.block_input.text().strip(),
+            "building": self.building_input.text().strip(),
+            "gender": self.gender_input.text().strip(),
+            "additional_info": self.additional_input.text().strip(),
+        }
+
+        update_user(uid, updated_data)
+        QMessageBox.information(self, "更新", "ユーザー情報を更新しました")
+        self.close()
+
+    def on_delete(self):
+        uid = self.nfc_id_input.text().strip()
+        if not is_registered(uid):
+            QMessageBox.warning(self, "未登録", "このカードは未登録です")
+            return
+
+        delete_user(uid)
+        QMessageBox.information(self, "削除", "ユーザー情報を削除しました")
         self.close()

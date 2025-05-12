@@ -7,10 +7,12 @@ import time
 class NFCWorker(QThread):
     signal = pyqtSignal(str)
 
-    def __init__(self):
+    def __init__(self, wait_seconds="30"):
         super().__init__()
         self.last_uid = None
+        self.last_read_time = None
         self.last_time = None
+        self.wait_seconds = wait_seconds
 
     def run(self):
         r = readers()
@@ -31,7 +33,7 @@ class NFCWorker(QThread):
                     uid = toHexString(data)
 
                     now = datetime.now()
-                    if uid == self.last_uid and self.last_time and now - self.last_time < timedelta(seconds=10):
+                    if uid == self.last_uid and self.last_time and now - self.last_time < timedelta(seconds=self.wait_seconds):
                         # 同じカードで短時間ならスキップ
                         time.sleep(0.5)
                         continue

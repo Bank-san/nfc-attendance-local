@@ -1,45 +1,73 @@
 # nfc_attendance_app/launcher.py
 
-from PyQt6.QtWidgets import QWidget, QPushButton, QVBoxLayout, QApplication
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QLabel, QPushButton, QGridLayout, QSizePolicy
+)
+from PyQt6.QtGui import QFont, QPalette, QColor, QIcon
+from PyQt6.QtCore import Qt
 from attendance.window import AttendanceWindow
 from registration.window import RegisterWindow
 from history.window import AttendanceHistoryWindow
 from summary.window import AttendanceSummaryWindow
 from manual.window import ManualEntryWindow
-from registration.list_window import UserListWindow  # ← 追加
+from registration.list_window import UserListWindow
+
 
 class LauncherWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("NFC出席管理システム")
-        self.resize(300, 400)
+        self.setWindowTitle("出席管理システム - メニュー")
+        self.resize(800, 600)
+
+        # 背景グラデーションカラー
+        palette = QPalette()
+        gradient = QColor(255, 140, 0)
+        palette.setColor(QPalette.ColorRole.Window, gradient)
+        self.setAutoFillBackground(True)
+        self.setPalette(palette)
 
         layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.attendance_button = QPushButton("出席モード")
-        self.attendance_button.clicked.connect(self.open_attendance)
+        title = QLabel("出席管理システム")
+        title.setFont(QFont("Arial", 24, QFont.Weight.Bold))
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setStyleSheet("color: white;")
+        layout.addWidget(title)
 
-        self.register_button = QPushButton("登録モード")
-        self.register_button.clicked.connect(self.open_register)
+        # ボタンのグリッド
+        button_grid = QGridLayout()
+        button_grid.setSpacing(20)
+        buttons = [
+            ("出席モード", self.open_attendance),
+            ("登録モード", self.open_register),
+            ("出席履歴", self.open_history),
+            ("来場分析", self.open_summary),
+            ("手動登録", self.open_manual),
+            ("登録者リスト", self.open_user_list),
+        ]
 
-        self.history_button = QPushButton("出席履歴")
-        self.history_button.clicked.connect(self.open_history)
+        for i, (label, callback) in enumerate(buttons):
+            btn = QPushButton(label)
+            btn.setFont(QFont("Arial", 14))
+            btn.setFixedSize(180, 80)
+            btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            btn.clicked.connect(callback)
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: white;
+                    border: 2px solid #ff8c00;
+                    border-radius: 10px;
+                    color: #ff8c00;
+                }
+                QPushButton:hover {
+                    background-color: #ffe0b2;
+                }
+            """)
+            row, col = divmod(i, 3)
+            button_grid.addWidget(btn, row, col)
 
-        self.summary_button = QPushButton("来場者分析")
-        self.summary_button.clicked.connect(self.open_summary)
-
-        self.manual_button = QPushButton("手動登録")
-        self.manual_button.clicked.connect(self.open_manual)
-
-        self.userlist_button = QPushButton("登録者リスト")  # ← 追加
-        self.userlist_button.clicked.connect(self.open_user_list)
-
-        for btn in [
-            self.attendance_button, self.register_button, self.history_button,
-            self.summary_button, self.manual_button, self.userlist_button
-        ]:
-            layout.addWidget(btn)
-
+        layout.addLayout(button_grid)
         self.setLayout(layout)
 
     def open_attendance(self):
@@ -62,14 +90,6 @@ class LauncherWindow(QWidget):
         self.manual_window = ManualEntryWindow()
         self.manual_window.show()
 
-    def open_user_list(self):  # ← 追加
+    def open_user_list(self):
         self.user_list_window = UserListWindow()
         self.user_list_window.show()
-
-
-if __name__ == "__main__":
-    import sys
-    app = QApplication(sys.argv)
-    window = LauncherWindow()
-    window.show()
-    sys.exit(app.exec())

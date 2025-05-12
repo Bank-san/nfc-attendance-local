@@ -1,73 +1,155 @@
-from database.engine import engine
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton
-from PyQt6.QtGui import QFont, QPixmap, QPalette, QBrush
-from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (
+    QWidget, QLabel, QVBoxLayout, QFrame, QSizePolicy, QSpacerItem
+)
+from PyQt6.QtGui import QPixmap, QPalette, QBrush, QFont, QMovie
+from PyQt6.QtCore import Qt, QSize, Qt as QtCore, QTimer
+import os
+
 from attendance.nfc_worker import NFCWorker
+from database.engine import engine
 from database.models import User, Attendance
 from sqlmodel import Session, select
 from datetime import datetime
-from registration.window import RegisterWindow
-import os
 
 class AttendanceWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("出席管理")
-        self.resize(500, 300)
+        self.illustrations = []
+        self.illustrations_drawn = False
+        self.setWindowTitle("Attendifyy 出席画面")
+        self.showFullScreen()
 
-        # 背景画像の設定
+        # 背景画像設定
         palette = QPalette()
         bg_path = os.path.join(os.path.dirname(__file__), "..", "images", "background.png")
         palette.setBrush(self.backgroundRole(), QBrush(QPixmap(bg_path)))
         self.setPalette(palette)
         self.setAutoFillBackground(True)
 
-        # メインレイアウト
-        layout = QVBoxLayout()
+        # メインフレーム
+        self.frame = QFrame()
+        self.frame.setObjectName("MainFrame")
+        self.setStyleSheet("""
+            QFrame#MainFrame {
+                background-color: rgba(100, 100, 100, 0.35);
+                border: 3px solid orange;
+                border-radius: 24px;
+            }
+            QLabel {
+                border: none;
+                background-color: transparent;
+            }
+        """)
 
-        # NFCアイコン表示
+        self.frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+        # 中央の内容レイアウト
+        self.frame_layout = QVBoxLayout()
+        self.frame_layout.setContentsMargins(60, 60, 60, 60)
+        self.frame_layout.setSpacing(30)
+
+        gif_path = os.path.join(os.path.dirname(__file__), "..", "images", "NFC.gif")
         self.nfc_icon = QLabel()
-        nfc_path = os.path.join(os.path.dirname(__file__), "..", "images", "NFC.gif")
-        self.nfc_icon.setPixmap(QPixmap(nfc_path).scaledToWidth(100))
+        self.movie = QMovie(gif_path)
+        self.nfc_icon.setMovie(self.movie)
         self.nfc_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.nfc_icon)
+        self.movie.start()
+        self.frame_layout.addWidget(self.nfc_icon)
 
-        # ステータスラベル
-        self.label = QLabel("↓ カードをかざしてください")
-        self.label.setFont(QFont("Arial", 18))
+        self.label = QLabel("カードをタップしてください")
+        self.label.setFont(QFont("Arial", 28, weight=QFont.Weight.Bold))
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.label.setStyleSheet("color: gray;")
-        layout.addWidget(self.label)
+        self.label.setStyleSheet("color: #fff;")
+        self.frame_layout.addWidget(self.label)
 
-        # 登録ボタン
-        self.register_button = QPushButton("新規登録")
-        self.register_button.setStyleSheet("padding: 8px; font-size: 16px;")
-        self.register_button.clicked.connect(self.open_register_window)
-        layout.addWidget(self.register_button, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.frame.setLayout(self.frame_layout)
 
-        self.setLayout(layout)
+        # メインレイアウト中央寄せ
+        self.main_layout = QVBoxLayout()
+        self.main_layout.addSpacerItem(QSpacerItem(0, 0, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
+        self.main_layout.addWidget(self.frame, alignment=Qt.AlignmentFlag.AlignHCenter)
+        self.main_layout.addSpacerItem(QSpacerItem(0, 0, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
+        self.setLayout(self.main_layout)
 
-        # NFCワーカー起動
+        # NFCリーダー起動
         self.worker = NFCWorker()
         self.worker.signal.connect(self.process_uid)
         self.worker.start()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self.illustrations_drawn:
+            self._add_corner_illustrations()
+            self.illustrations_drawn = True
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+
+        if hasattr(self, "frame"):
+            screen_width = self.width()
+            self.frame.setFixedWidth(int(screen_width * 0.4))
+
+        illustration_size = int(self.width() * 0.12)
+        for icon, pixmap, dx, dy, align in self.illustrations:
+            scaled = pixmap.scaled(
+                illustration_size, illustration_size,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+            icon.setPixmap(scaled)
+            x, y = self._pos_from_alignment(align, dx, dy, illustration_size)
+            icon.setGeometry(x, y, illustration_size, illustration_size)
+
+        if hasattr(self, "movie"):
+            size = int(self.width() * 0.08)
+            self.movie.setScaledSize(QSize(size, size))
+
+    def _add_corner_illustrations(self):
+        for name, dx, dy, align in [
+            ("Drone.png", 20, 20, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft),
+            ("gaming.png", -20, 20, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight),
+            ("vrbox.png", 20, -20, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignLeft),
+            ("services.png", -20, -20, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignRight),
+        ]:
+            path = os.path.join(os.path.dirname(__file__), "..", "images", name)
+            pixmap = QPixmap(path)
+            if pixmap.isNull():
+                print(f"\u26a0\ufe0f 読み込み失敗: {path}")
+                continue
+
+            icon = QLabel(self)
+            icon.setStyleSheet("background: transparent;")
+            icon.setScaledContents(False)
+            icon.show()
+            self.illustrations.append((icon, pixmap, dx, dy, align))
+
+    def _pos_from_alignment(self, align, dx, dy, size):
+        w, h = self.width(), self.height()
+        x = dx if align & Qt.AlignmentFlag.AlignLeft else w - size + dx
+        y = dy if align & Qt.AlignmentFlag.AlignTop else h - size + dy
+        return x, y
+
+    def reset_message(self):
+        self.label.setText("カードをタップしてください")
+        self.label.setStyleSheet("color: #fff; font-size: 28px;")
+
     def process_uid(self, uid):
-        if uid == "カードをかざしてください":
-            self.label.setText("↓ カードをかざしてください")
-            self.label.setStyleSheet("color: gray; font-size: 16px;")
+        if not uid or uid in ["", "カードをかざしてください"]:
+            self.reset_message()
             return
 
-        if uid.startswith("エラー") or not uid:
-            self.label.setText("⚠️ 読み取りエラー")
-            self.label.setStyleSheet("color: red; font-size: 16px;")
+        if uid.startswith("エラー"):
+            self.label.setText("\u26a0\ufe0f カード読み取りエラー")
+            self.label.setStyleSheet("color: red; font-size: 28px;")
+            QTimer.singleShot(5000, self.reset_message)
             return
 
         with Session(engine) as session:
             user = session.exec(select(User).where(User.nfc_id == uid)).first()
             if not user:
-                self.label.setText("未登録のカードです。登録してください。")
-                self.label.setStyleSheet("color: orange; font-size: 16px;")
+                self.label.setText("未登録のカードです")
+                self.label.setStyleSheet("color: orange; font-size: 28px;")
+                QTimer.singleShot(5000, self.reset_message)
                 return
 
             latest = session.exec(
@@ -80,8 +162,8 @@ class AttendanceWindow(QWidget):
                 latest.check_out = datetime.now()
                 session.add(latest)
                 session.commit()
-                self.label.setText(f"👋 おつかれさまでした、{user.name_kanji} さん")
-                self.label.setStyleSheet("color: red; font-size: 16px;")
+                self.label.setText(f"\ud83d\udc4b おつかれさまでした、{user.name_kanji} さん")
+                self.label.setStyleSheet("color: red; font-size: 28px;")
             else:
                 new_att = Attendance(
                     nfc_id=uid,
@@ -100,9 +182,8 @@ class AttendanceWindow(QWidget):
                 )
                 session.add(new_att)
                 session.commit()
-                self.label.setText(f"🙌 ようこそ、{user.name_kanji} さん")
-                self.label.setStyleSheet("color: green; font-size: 16px;")
+                self.label.setText(f"\ud83d\ude4c ようこそ、{user.name_kanji} さん")
+                self.label.setStyleSheet("color: green; font-size: 28px;")
 
-    def open_register_window(self):
-        self.register_window = RegisterWindow()
-        self.register_window.show()
+        # 一定時間後に初期メッセージに戻す
+        QTimer.singleShot(5000, self.reset_message)

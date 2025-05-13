@@ -1,9 +1,7 @@
-# nfc_attendance_app/launcher.py
-
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QPushButton, QGridLayout, QSizePolicy
 )
-from PyQt6.QtGui import QFont, QPalette, QColor, QIcon
+from PyQt6.QtGui import QFont, QPalette, QColor
 from PyQt6.QtCore import Qt
 from attendance.window import AttendanceWindow
 from registration.window import RegisterWindow
@@ -11,7 +9,6 @@ from history.window import AttendanceHistoryWindow
 from summary.window import AttendanceSummaryWindow
 from manual.window import ManualEntryWindow
 from registration.list_window import UserListWindow
-
 
 class LauncherWindow(QWidget):
     def __init__(self):
@@ -35,9 +32,11 @@ class LauncherWindow(QWidget):
         title.setStyleSheet("color: white;")
         layout.addWidget(title)
 
-        # ボタンのグリッド
         button_grid = QGridLayout()
         button_grid.setSpacing(20)
+
+        self.attendance_window = AttendanceWindow()
+
         buttons = [
             ("出席モード", self.open_attendance),
             ("登録モード", self.open_register),
@@ -71,11 +70,12 @@ class LauncherWindow(QWidget):
         self.setLayout(layout)
 
     def open_attendance(self):
-        self.attendance_window = AttendanceWindow()
         self.attendance_window.show()
+        self.attendance_window.resume_attendance_mode()
 
     def open_register(self):
-        self.register_window = RegisterWindow()
+        self.attendance_window.worker.mode = "registration"
+        self.register_window = RegisterWindow(attendance_window=self.attendance_window)
         self.register_window.show()
 
     def open_history(self):

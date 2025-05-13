@@ -1,13 +1,18 @@
 from PyQt6.QtWidgets import (
-    QWidget, QFormLayout, QLineEdit, QPushButton, QLabel, QHBoxLayout
+    QWidget, QFormLayout, QLineEdit, QPushButton, QLabel
 )
-from PyQt6.QtCore import Qt, QDate
+from PyQt6.QtCore import Qt, QTimer
 from registration.logic import is_registered, register_user, get_user_by_uid
 from attendance.nfc_worker import NFCWorker
 
 class RegisterWindow(QWidget):
-    def __init__(self):
+    def __init__(self, attendance_window=None):
         super().__init__()
+        self.attendance_window = attendance_window
+        if self.attendance_window:
+            self.attendance_window.pause_worker()
+            print("[DEBUG] RegisterWindow: attendance paused")
+
         self.setWindowTitle("カード登録フォーム")
         self.setMinimumWidth(500)
 
@@ -54,7 +59,7 @@ class RegisterWindow(QWidget):
 
         self.setLayout(self.layout)
 
-        self.reader = NFCWorker(wait_seconds=0)  # 登録画面は連続スキャンOK
+        self.reader = NFCWorker(wait_seconds=0)
         self.reader.signal.connect(self.on_uid_detected)
         self.reader.start()
 
@@ -113,3 +118,10 @@ class RegisterWindow(QWidget):
         register_user(uid, **user_data)
         self.status_label.setText("✅ 登録が完了しました")
         self.status_label.setStyleSheet("color: green;")
+        QTimer.singleShot(1200, self.close)
+
+    def closeEvent(self, event):
+        if self.attendance_window:
+            self.attendance_window.resume_attendance_mode()
+            print("[DEBUG] RegisterWindow: attendance resumed")
+        super().closeEvent(event)

@@ -7,12 +7,13 @@ import time
 class NFCWorker(QThread):
     signal = pyqtSignal(str)
 
-    def __init__(self, wait_seconds="30"):
+    def __init__(self, wait_seconds=0, mode="attendance"):
         super().__init__()
-        self.last_uid = None
-        self.last_read_time = None
-        self.last_time = None
         self.wait_seconds = wait_seconds
+        self.mode = mode  # "attendance" or "registration"
+        self.last_uid = None
+        self.last_time = None
+        self.card_present = False
 
     def run(self):
         r = readers()
@@ -31,24 +32,30 @@ class NFCWorker(QThread):
 
                 if sw1 == 0x90 and sw2 == 0x00:
                     uid = toHexString(data)
-
                     now = datetime.now()
-                    if uid == self.last_uid and self.last_time and now - self.last_time < timedelta(seconds=self.wait_seconds):
-                        # 同じカードで短時間ならスキップ
-                        time.sleep(0.5)
-                        continue
 
-                    self.last_uid = uid
-                    self.last_time = now
+                    if uid == self.last_uid:
+                        if not self.card_present:
+                            if self.wait_seconds == 0 or not self.last_time or now - self.last_time >= timedelta(seconds=self.wait_seconds):
+                                self.signal.emit(uid)
+                                self.last_time = now
+                                self.card_present = True
+                    else:
+                        self.signal.emit(uid)
+                        self.last_uid = uid
+                        self.last_time = now
+                        self.card_present = True
 
-                    self.signal.emit(uid)
                 else:
+                    self.card_present = False
+                    self.last_uid = None
                     self.signal.emit("カードをかざしてください")
 
                 time.sleep(0.5)
                 connection.disconnect()
 
-            except Exception as e:
-                # スマートカード未挿入などの場合
+            except Exception:
+                self.card_present = False
+                self.last_uid = None
                 self.signal.emit("カードをかざしてください")
                 time.sleep(0.5)
